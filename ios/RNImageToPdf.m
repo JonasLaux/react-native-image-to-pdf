@@ -46,6 +46,7 @@ RCT_EXPORT_METHOD(createPDFbyImages:(NSDictionary *)options
     }
     
     float quality = [[options objectForKey:@"quality"] floatValue];
+    int dpi = [options objectForKey:@"dpi"] ? [[options objectForKey:@"dpi"] intValue] : 72;
     
     for (NSString *imagePath in imagePathArray) {
         UIImage *image = [UIImage imageWithContentsOfFile:imagePath];
@@ -60,7 +61,7 @@ RCT_EXPORT_METHOD(createPDFbyImages:(NSDictionary *)options
         [self.imageViewArray addObject:imageView];
     }
     
-    [self createPDFWithFilename:filename];
+    [self createPDFWithFilename:filename dpi:dpi];
     NSLog(@"PDF was created successfully");
 }
 
@@ -92,19 +93,32 @@ RCT_EXPORT_METHOD(createPDFbyImages:(NSDictionary *)options
 }
 
 
-- (void)createPDFWithFilename:(NSString *)filename {
+- (void)createPDFWithFilename:(NSString *)filename dpi:(int)dpi{
+    
+    const float pdfScale = 72.0/dpi;
     
     UIImageView *firstImageView = self.imageViewArray.firstObject;
     //Start with pdf:
     NSMutableData *pdfData = [NSMutableData data];
     //Start pdf context;
-    UIGraphicsBeginPDFContextToData(pdfData, firstImageView.bounds, nil);
+    const CGRect bounds = CGRectMake(firstImageView.bounds.origin.x,
+                               firstImageView.bounds.origin.y,
+                               round(firstImageView.bounds.size.width*pdfScale),
+                               round(firstImageView.bounds.size.height*pdfScale));
+    
+    UIGraphicsBeginPDFContextToData(pdfData, bounds, nil);
     
     CGContextRef pdfContext;
     for (UIImageView *iv in self.imageViewArray) {
         //Start new page with image bounds:
-        UIGraphicsBeginPDFPageWithInfo(iv.bounds, nil);
+        UIGraphicsBeginPDFPageWithInfo(bounds, nil);
         pdfContext = UIGraphicsGetCurrentContext();
+        
+        CGContextSetInterpolationQuality(pdfContext, kCGInterpolationHigh);
+        //        CGContextTranslateCTM(pdfContext, 0.0, 0.0);
+        CGContextScaleCTM(pdfContext, pdfScale, pdfScale);
+        CGContextSaveGState(pdfContext);
+        
         //Render image layer to context:
         [iv.layer renderInContext:pdfContext];
     }
