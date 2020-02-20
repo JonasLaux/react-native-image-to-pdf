@@ -7,6 +7,7 @@ package com.anyline.RNImageToPDF;
 import android.graphics.Bitmap;
 import android.graphics.BitmapFactory;
 import android.graphics.Canvas;
+import android.graphics.Matrix;
 import android.graphics.pdf.PdfDocument;
 import android.graphics.pdf.PdfDocument.Page;
 import android.graphics.pdf.PdfDocument.PageInfo;
@@ -56,11 +57,15 @@ public class RNImageToPdf extends ReactContextBaseJavaModule {
 
         String documentName = options.getString("name");
 
+        final int dpi = options.hasKey("dpi") ? options.getInt("dpi") : 72;
+        final float pdfScale = 72.f / dpi;
+
         ReadableMap maxSize = options.hasKey("maxSize") ? options.getMap("maxSize") : null;
         int maxHeight = maxSize != null && maxSize.hasKey("height") ? maxSize.getInt("height") : 0;
         int maxWidth = maxSize != null && maxSize.hasKey("width") ? maxSize.getInt("width") : 0;
 
         int quality = options.hasKey("quality") ? (int)Math.round(100 * options.getDouble("quality")) : 0;
+
 
         PdfDocument document = new PdfDocument();
         try {
@@ -74,14 +79,22 @@ public class RNImageToPdf extends ReactContextBaseJavaModule {
 
                 // compress
                 bmp = compress(bmp, quality);
+                bmp.setDensity(dpi);
 
-                PageInfo pageInfo = new Builder(bmp.getWidth(), bmp.getHeight(), 1).create();
+                final int pageW = Math.round(bmp.getWidth()*pdfScale);
+                final int pageH = Math.round(bmp.getHeight()*pdfScale);
+
+                PageInfo pageInfo = new Builder(pageW, pageH, 1).create();
 
                 // start a page
                 Page page = document.startPage(pageInfo);
 
                 // add image to page
                 Canvas canvas = page.getCanvas();
+                Matrix m = new Matrix();
+                m.setScale(pdfScale, pdfScale);
+                canvas.setMatrix(m);
+                canvas.setDensity(dpi);
                 canvas.drawBitmap(bmp, 0, 0, null);
 
                 document.finishPage(page);
@@ -138,6 +151,7 @@ public class RNImageToPdf extends ReactContextBaseJavaModule {
         ByteArrayOutputStream stream = new ByteArrayOutputStream();
         bmp.compress(Bitmap.CompressFormat.JPEG, quality, stream);
         byte[] byteArray = stream.toByteArray();
+
         stream.close();
         return BitmapFactory.decodeByteArray(byteArray, 0, byteArray.length);
     }
