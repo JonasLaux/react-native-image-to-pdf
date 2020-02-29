@@ -7,10 +7,12 @@ package com.anyline.RNImageToPDF;
 import android.graphics.Bitmap;
 import android.graphics.BitmapFactory;
 import android.graphics.Canvas;
+import android.graphics.Matrix;
 import android.graphics.pdf.PdfDocument;
 import android.graphics.pdf.PdfDocument.Page;
 import android.graphics.pdf.PdfDocument.PageInfo;
 import android.graphics.pdf.PdfDocument.PageInfo.Builder;
+import android.media.ExifInterface;
 import android.net.Uri;
 import android.os.ParcelFileDescriptor;
 
@@ -66,6 +68,8 @@ public class RNImageToPdf extends ReactContextBaseJavaModule {
         try {
 
             for (int idx = 0; idx < images.size(); idx++) {
+
+                int orientation = this.getBitmapRotation(images.getString(idx));
                 // get image
                 Bitmap bmp = getImageFromFile(images.getString(idx));
 
@@ -74,6 +78,9 @@ public class RNImageToPdf extends ReactContextBaseJavaModule {
 
                 // compress
                 bmp = compress(bmp, quality);
+
+                if (orientation != 0)
+                    bmp = rotate(bmp, orientation);
 
                 PageInfo pageInfo = new Builder(bmp.getWidth(), bmp.getHeight(), 1).create();
 
@@ -103,6 +110,36 @@ public class RNImageToPdf extends ReactContextBaseJavaModule {
         document.close();
     }
 
+    private int getBitmapRotation(String path) {
+        int rotation = 0;
+        switch ( getExifOrientation(path) ) {
+            case ExifInterface.ORIENTATION_ROTATE_180:
+                rotation = 180;
+                break;
+            case ExifInterface.ORIENTATION_ROTATE_90:
+                rotation = 90;
+                break;
+            case ExifInterface.ORIENTATION_ROTATE_270:
+                rotation = 270;
+                break;
+        }
+
+        return rotation;
+    }
+
+    private int getExifOrientation(String path) {
+        ExifInterface exif;
+        int orientation = 0;
+        try {
+            exif = new ExifInterface( path );
+            orientation = exif.getAttributeInt( ExifInterface.TAG_ORIENTATION, 1 );
+        } catch ( IOException e ) {
+            e.printStackTrace();
+        }
+
+        return orientation;
+    }
+
     private Bitmap getImageFromFile(String path) throws IOException {
         if (path.startsWith("content://")) {
             return getImageFromContentResolver(path);
@@ -119,6 +156,16 @@ public class RNImageToPdf extends ReactContextBaseJavaModule {
         Bitmap image = BitmapFactory.decodeFileDescriptor(fileDescriptor);
         parcelFileDescriptor.close();
         return image;
+    }
+
+    private Bitmap rotate(Bitmap bitmap, float degrees) {
+        Bitmap bInput, bOutput;
+
+        Matrix matrix = new Matrix();
+        matrix.setRotate(degrees);
+        bOutput = Bitmap.createBitmap(bitmap, 0, 0, bitmap.getWidth(), bitmap.getHeight(), matrix, true);
+
+        return bOutput;
     }
 
     private Bitmap resize(Bitmap bitmap, int maxWidth, int maxHeight) {
